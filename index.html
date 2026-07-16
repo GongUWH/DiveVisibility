@@ -66,6 +66,8 @@ input[type=range]{width:100%;accent-color:#4fc3f7;cursor:pointer}
 .mbtn{width:36px;height:36px;background:rgba(5,13,26,.9);border:1px solid rgba(79,195,247,.18);border-radius:8px;color:#4fc3f7;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;user-select:none}
 .mbtn:hover{background:rgba(79,195,247,.1)}
 #udot{position:absolute;z-index:15;width:14px;height:14px;border-radius:50%;background:#4fc3f7;border:2.5px solid #fff;box-shadow:0 0 0 4px rgba(79,195,247,.25);transform:translate(-50%,-50%);pointer-events:none;display:none}
+#composite-toggle.active{background:rgba(79,195,247,.35);border-color:rgba(79,195,247,.6)}
+#composite-toggle.active #composite-knob{left:21px;opacity:1;background:#4fc3f7}
 </style>
 </head>
 <body>
@@ -81,7 +83,19 @@ input[type=range]{width:100%;accent-color:#4fc3f7;cursor:pointer}
         <button class="dstep" onclick="stepDate(1)">1d &#8594;</button>
         <button class="dstep" onclick="stepDate(7)">7d &#8594;</button>
       </div>
-      <div class="dnote">Chlorophyll gaps = cloud cover or no satellite pass. SST always loads.</div>
+      <div id="date-range-display" style="display:none;margin-top:7px;background:rgba(79,195,247,.06);border:1px solid rgba(79,195,247,.15);border-radius:5px;padding:6px 10px;font-size:9px;color:rgba(79,195,247,.8);line-height:1.7">
+        <span style="color:rgba(255,255,255,.35);letter-spacing:1px;text-transform:uppercase;font-size:8px">3-Day Composite Range</span><br>
+        <span id="date-d1"></span><br>
+        <span id="date-d2"></span><br>
+        <span id="date-d3" style="color:#4fc3f7;font-weight:bold"></span> &larr; selected
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+        <span style="font-size:9px;color:rgba(255,255,255,.35);letter-spacing:1px;text-transform:uppercase">3-Day Composite</span>
+        <div id="composite-toggle" onclick="toggleComposite()" style="width:40px;height:22px;border-radius:11px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);cursor:pointer;position:relative;transition:background .2s">
+          <div id="composite-knob" style="position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;opacity:0.4"></div>
+        </div>
+      </div>
+      <div class="dnote">Chlorophyll gaps = cloud cover. SST always loads.</div>
     </div>
     <div class="sec">
       <div class="slbl">Your Location</div>
@@ -173,6 +187,28 @@ var LEGENDS = {
 function fmtDate(d){return d.toISOString().split('T')[0];}
 var todayStr=fmtDate(new Date(Date.now()-864e5*1));
 var curDate=fmtDate(new Date(Date.now()-864e5*2));
+var compositeMode=false;
+
+function toggleComposite(){
+  compositeMode=!compositeMode;
+  var tog=document.getElementById('composite-toggle');
+  var display=document.getElementById('date-range-display');
+  tog.classList.toggle('active',compositeMode);
+  display.style.display=compositeMode?'block':'none';
+  if(compositeMode) updateDateRangeDisplay();
+  clearOverlayTiles();draw();
+}
+
+function updateDateRangeDisplay(){
+  var d=new Date(curDate);
+  var d1=new Date(d); d1.setDate(d1.getDate()-2);
+  var d2=new Date(d); d2.setDate(d2.getDate()-1);
+  var d3=new Date(d);
+  var opts={weekday:'short',month:'short',day:'numeric'};
+  document.getElementById('date-d1').textContent=d1.toLocaleDateString('en-AU',opts);
+  document.getElementById('date-d2').textContent=d2.toLocaleDateString('en-AU',opts);
+  document.getElementById('date-d3').textContent=d3.toLocaleDateString('en-AU',opts);
+}
 
 function stepDate(n){
   var d=new Date(curDate);d.setDate(d.getDate()+n);
@@ -180,6 +216,7 @@ function stepDate(n){
   curDate=s;
   document.getElementById('date-in').value=s;
   document.getElementById('bdg').textContent=s;
+  if(compositeMode)updateDateRangeDisplay();
   clearOverlayTiles();draw();
 }
 
@@ -249,21 +286,8 @@ function buildUrl(cfg,tx,ty,tz){
     if(cfg.wmsServer==='imos'){
       return buildImosUrl(cfg,tx,ty,tz,curDate);
     }
-    // NASA GIBS WMS
-    if(cfg.composite && cfg.composite===3){
-      // True 3-day composite: centre date ±1 day
-      var d1=new Date(curDate); d1.setDate(d1.getDate()-1);
-      var d2=new Date(curDate); d2.setDate(d2.getDate()+1);
-      var timeRange=fmtDate(d1)+'/'+fmtDate(d2);
-      return buildWmsUrl(cfg.wmsLayer,tx,ty,tz,timeRange);
-    }
-    // Single day with ±1 day fallback
-    var d1=new Date(curDate);
-    d1.setDate(d1.getDate()-1);
-    var d2=new Date(curDate);
-    d2.setDate(d2.getDate()+1);
-    var timeRange=fmtDate(d1)+'/'+fmtDate(d2);
-    return buildWmsUrl(cfg.wmsLayer,tx,ty,tz,timeRange);
+    // NASA GIBS WMS — single date only (composite handled separately in _draw)
+    return buildWmsUrl(cfg.wmsLayer,tx,ty,tz,curDate);
   }
   return cfg.url
     .replace('{z}',tz).replace('{y}',ty).replace('{x}',tx)
@@ -278,6 +302,19 @@ function draw(){
   requestAnimationFrame(function(){drawPending=false;_draw();});
 }
 
+// Get the dates to render for a given layer (3 days if composite mode)
+function getDatesForLayer(cfg){
+  if(!compositeMode || cfg.type==='xyz' || cfg.type==='wmts') return [curDate];
+  // For WMS chlorophyll layers, return 3 dates to stack
+  if(cfg.type==='wms'){
+    var d1=new Date(curDate); d1.setDate(d1.getDate()-2);
+    var d2=new Date(curDate); d2.setDate(d2.getDate()-1);
+    var d3=new Date(curDate);
+    return [fmtDate(d1), fmtDate(d2), fmtDate(d3)];
+  }
+  return [curDate];
+}
+
 function _draw(){
   var w=W(),h=H();if(!w||!h)return;
   var existing={};
@@ -286,41 +323,59 @@ function _draw(){
 
   LAYERS.forEach(function(cfg,li){
     if(!cfg.on)return;
-    var tz=Math.min(Math.floor(V.z),cfg.maxZ);
-    var sc=TS*Math.pow(2,V.z-tz);
-    var tc=Math.pow(2,tz);
-    var cx=lon2tx(V.cx,tz),cy=lat2ty(V.cy,tz);
-    var ox=w/2-cx*sc,oy=h/2-cy*sc;
-    var x0=Math.floor(-ox/sc)-1,x1=Math.ceil((w-ox)/sc)+1;
-    var y0=Math.floor(-oy/sc)-1,y1=Math.ceil((h-oy)/sc)+1;
+    var dates=getDatesForLayer(cfg);
+    // opacity per layer: divide by number of dates so stacked tiles don't oversaturate
+    var tileOpacity = compositeMode && dates.length>1 ? cfg.opacity/dates.length : cfg.opacity;
 
-    for(var tx=x0;tx<=x1;tx++){
-      for(var ty=y0;ty<=y1;ty++){
-        if(ty<0||ty>=tc)continue;
-        var wx=((tx%tc)+tc)%tc;
-        var px=Math.round(tx*sc+ox),py=Math.round(ty*sc+oy),sz=Math.round(sc);
-        var url=buildUrl(cfg,wx,ty,tz);
-        var k=cfg.id+'|'+tz+'|'+wx+'|'+ty;
-        used[k]=1;
+    dates.forEach(function(dateForTile, di){
+      var tz=Math.min(Math.floor(V.z),cfg.maxZ);
+      var sc=TS*Math.pow(2,V.z-tz);
+      var tc=Math.pow(2,tz);
+      var cx=lon2tx(V.cx,tz),cy=lat2ty(V.cy,tz);
+      var ox=w/2-cx*sc,oy=h/2-cy*sc;
+      var x0=Math.floor(-ox/sc)-1,x1=Math.ceil((w-ox)/sc)+1;
+      var y0=Math.floor(-oy/sc)-1,y1=Math.ceil((h-oy)/sc)+1;
 
-        if(existing[k]){
-          var e=existing[k];
-          e.style.left=px+'px';e.style.top=py+'px';
-          e.style.width=sz+'px';e.style.height=sz+'px';
-          e.style.opacity=cfg.opacity;
-        } else {
-          var img=new Image();
-          img.dataset.k=k;
-          if(cfg.type!=='xyz')img.dataset.overlay='1';
-          img.style.cssText='position:absolute;left:'+px+'px;top:'+py+'px;width:'+sz+'px;height:'+sz+'px;opacity:'+cfg.opacity+';z-index:'+li+';pointer-events:none;image-rendering:auto;-webkit-filter:blur(0);filter:blur(0);';
-          anyNew=true;
-          img.onload=function(){loadDone();};
-          img.onerror=function(){this.style.display='none';loadDone();};
-          img.src=url;
-          tilesEl.appendChild(img);
+      for(var tx=x0;tx<=x1;tx++){
+        for(var ty=y0;ty<=y1;ty++){
+          if(ty<0||ty>=tc)continue;
+          var wx=((tx%tc)+tc)%tc;
+          var px=Math.round(tx*sc+ox),py=Math.round(ty*sc+oy),sz=Math.round(sc);
+
+          // Build URL for this specific date
+          var url;
+          if(cfg.type==='wms'){
+            if(cfg.wmsServer==='imos'){
+              url=buildImosUrl(cfg,tx,ty,tz,dateForTile);
+            } else {
+              url=buildWmsUrl(cfg.wmsLayer,wx,ty,tz,dateForTile);
+            }
+          } else {
+            url=buildUrl(cfg,wx,ty,tz);
+          }
+
+          var k=cfg.id+'|d'+di+'|'+tz+'|'+wx+'|'+ty;
+          used[k]=1;
+
+          if(existing[k]){
+            var e=existing[k];
+            e.style.left=px+'px';e.style.top=py+'px';
+            e.style.width=sz+'px';e.style.height=sz+'px';
+            e.style.opacity=tileOpacity;
+          } else {
+            var img=new Image();
+            img.dataset.k=k;
+            if(cfg.type!=='xyz')img.dataset.overlay='1';
+            img.style.cssText='position:absolute;left:'+px+'px;top:'+py+'px;width:'+sz+'px;height:'+sz+'px;opacity:'+tileOpacity+';z-index:'+li+';pointer-events:none;image-rendering:auto;';
+            anyNew=true;
+            img.onload=function(){loadDone();};
+            img.onerror=function(){this.style.display='none';loadDone();};
+            img.src=url;
+            tilesEl.appendChild(img);
+          }
         }
       }
-    }
+    });
   });
 
   Object.keys(existing).forEach(function(k){if(!used[k])existing[k].remove();});
@@ -487,6 +542,7 @@ function renderPtInfo(){
 
 function renderAll(){renderLayers();renderLegend();renderPtInfo();document.getElementById('bdg').textContent=curDate;}
 
+window.toggleComposite=toggleComposite;
 window.toggle=function(id){
   var cfg=LAYERS.find(function(c){return c.id===id;});
   cfg.on=!cfg.on;
@@ -513,6 +569,7 @@ di.value=curDate;di.max=todayStr;di.min='2020-01-01';
 di.addEventListener('change',function(e){
   curDate=e.target.value;
   document.getElementById('bdg').textContent=curDate;
+  if(compositeMode)updateDateRangeDisplay();
   clearOverlayTiles();draw();
 });
 window.addEventListener('resize',function(){draw();updateDot();});
