@@ -107,7 +107,7 @@ input[type=range]{width:100%;accent-color:#4fc3f7;cursor:pointer}
     <div id="pt-wrap"></div>
     <div class="sec" style="margin-top:auto">
       <div class="slbl">Data Sources</div>
-      <div class="srclist">Esri World Imagery<br>NASA GIBS WMS · MODIS Aqua (daily + 3-day)<br>NASA GIBS WMS · VIIRS SNPP (daily + 3-day)<br>IMOS THREDDS · Australian coastal<br>GHRSST MUR SST (gap-filled)<br>NASA GIBS / Earthdata</div>
+      <div class="srclist">Esri World Imagery<br>NASA GIBS · MODIS Aqua Chlorophyll<br>NASA GIBS · VIIRS SNPP Chlorophyll<br>IMOS THREDDS · Australian coastal<br>GHRSST MUR SST (gap-filled)<br>NASA GIBS / Earthdata</div>
     </div>
   </div>
   <button id="tog">&#9664;</button>
@@ -141,56 +141,20 @@ var LAYERS = [
     url:'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/{date}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png'
   },
   {
-    id:'chlor_modis', label:'Chlorophyll (MODIS)', sub:'MODIS Aqua · daily swath',
-    color:'#66bb6a', on:false, opacity:0.85, maxZ:9, type:'wms',
-    wmsLayer:'MODIS_Aqua_L2_Chlorophyll_A'
-  },
-  {
-    id:'chlor_viirs', label:'Chlorophyll (VIIRS)', sub:'VIIRS SNPP · daily swath',
-    color:'#ffa726', on:false, opacity:0.85, maxZ:9, type:'wms',
-    wmsLayer:'VIIRS_SNPP_L2_Chlorophyll_A'
+    id:'chlorophyll', label:'Chlorophyll', sub:'MODIS + VIIRS + IMOS · all sources',
+    color:'#66bb6a', on:false, opacity:0.9, maxZ:9, type:'chlor_composite'
   },
   {
     id:'terra_tc', label:'True Colour (Terra)', sub:'MODIS Terra · raw satellite',
     color:'#29b6f6', on:false, opacity:1.0, maxZ:9, type:'wmts',
     url:'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/{date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg'
   },
-  {
-    id:'imos_chlor', label:'Chlorophyll (IMOS)', sub:'IMOS · Australian coastal · high res',
-    color:'#00e676', on:false, opacity:0.85, maxZ:10, type:'wms',
-    wmsLayer:'IMOS/SRS/OC/gridded/aqua/P1D/{year}/{month}/A{datecompact}_chl_oc3.nc',
-    wmsName:'chl_oc3', wmsServer:'imos'
-  },
-  {
-    id:'chlor_modis_3d', label:'Chlorophyll 3-Day (MODIS)', sub:'MODIS Aqua · 3-day composite · gap filled',
-    color:'#69f0ae', on:false, opacity:0.85, maxZ:9, type:'wms',
-    wmsLayer:'MODIS_Aqua_L2_Chlorophyll_A', composite:3
-  },
-  {
-    id:'chlor_viirs_3d', label:'Chlorophyll 3-Day (VIIRS)', sub:'VIIRS SNPP · 3-day composite · gap filled',
-    color:'#ffcc02', on:false, opacity:0.85, maxZ:9, type:'wms',
-    wmsLayer:'VIIRS_SNPP_L2_Chlorophyll_A', composite:3
-  },
-  {
-    id:'chlor_1day', label:'Chlorophyll Daily Composite', sub:'MODIS + VIIRS + IMOS · selected day · all sources',
-    color:'#e040fb', on:false, opacity:0.9, maxZ:9, type:'daily_composite'
-  },
-  {
-    id:'chlor_best', label:'Chlorophyll 3-Day Composite', sub:'MODIS + VIIRS + IMOS · 3 days · all sources',
-    color:'#ff6ec7', on:false, opacity:0.9, maxZ:9, type:'best_composite'
-  },
 ];
 
 var LEGENDS = {
   sst:{title:'Sea Surface Temp (C)',desc:'Cold=blue/purple. Warm=red. Cold upwellings often reduce visibility.',grad:'linear-gradient(to right,#0d0060,#0000ff,#00b4ff,#00ffff,#ffff00,#ff8000,#ff0000)',ticks:['<12','16','20','24','>28']},
-  chlor_modis:{title:'Chlorophyll-a MODIS (mg/m3)',desc:'Blue=clear water. Green/yellow/red=more phytoplankton=lower vis. Gaps=cloud cover.',grad:'linear-gradient(to right,#0a0a5e,#0040ff,#00c0ff,#00ff80,#ffff00,#ff8000,#ff0000)',ticks:['0.01','0.1','1','10','60']},
-  chlor_viirs:{title:'Chlorophyll-a VIIRS (mg/m3)',desc:'Blue=clear water. Green/yellow/red=more phytoplankton=lower vis. Gaps=cloud cover.',grad:'linear-gradient(to right,#0a0a5e,#0040ff,#00c0ff,#00ff80,#ffff00,#ff8000,#ff0000)',ticks:['0.01','0.1','1','10','60']},
+  chlorophyll:{title:'Chlorophyll-a (mg/m³)',desc:'MODIS + VIIRS + IMOS combined. Blue=clear water. Green/yellow/red=phytoplankton=lower vis. Gaps=cloud cover.',grad:'linear-gradient(to right,#0a0a5e,#0040ff,#00c0ff,#00ff80,#ffff00,#ff8000,#ff0000)',ticks:['0.01','0.1','1','10','60']},
   terra_tc:{title:'True Colour MODIS Terra',desc:'Raw satellite image. Green/brown water=phytoplankton. White=cloud cover.',grad:'linear-gradient(to right,#001a33,#003366,#006699,#3399cc,#cceeff,#fff)',ticks:['Deep','','','','Cloud']},
-  imos_chlor:{title:'Chlorophyll IMOS (mg/m3)',desc:'Australian-specific processing. Higher coastal resolution. Blue=clear, green/yellow/red=phytoplankton=lower vis.',grad:'linear-gradient(to right,#0a0a5e,#0040ff,#00c0ff,#00ff80,#ffff00,#ff8000,#ff0000)',ticks:['0.01','0.1','1','10','60']},
-  chlor_modis_3d:{title:'Chlorophyll 3-Day MODIS (mg/m3)',desc:'3-day composite fills cloud gaps for a fuller picture. Blue=clear, green/yellow/red=phytoplankton=lower vis.',grad:'linear-gradient(to right,#0a0a5e,#0040ff,#00c0ff,#00ff80,#ffff00,#ff8800,#ff0000)',ticks:['0.01','0.1','1','10','60']},
-  chlor_viirs_3d:{title:'Chlorophyll 3-Day VIIRS (mg/m3)',desc:'3-day composite fills cloud gaps for a fuller picture. Blue=clear, green/yellow/red=phytoplankton=lower vis.',grad:'linear-gradient(to right,#0a0a5e,#0040ff,#00c0ff,#00ff80,#ffff00,#ff8800,#ff0000)',ticks:['0.01','0.1','1','10','60']},
-  chlor_1day:{title:'Chlorophyll Daily Composite (mg/m3)',desc:'MODIS + VIIRS + IMOS blended for selected day. Best single-day picture from all sources.',grad:'linear-gradient(to right,#0a0a5e,#0040ff,#00c0ff,#00ff80,#ffff00,#ff8800,#ff0000)',ticks:['0.01','0.1','1','10','60']},
-  chlor_best:{title:'Chlorophyll 3-Day Composite (mg/m3)',desc:'MODIS + VIIRS + IMOS stacked across 3 days. Maximum gap filling from all available satellite sources.',grad:'linear-gradient(to right,#0a0a5e,#0040ff,#00c0ff,#00ff80,#ffff00,#ff8800,#ff0000)',ticks:['0.01','0.1','1','10','60']},
 };
 
 // ── Date ──────────────────────────────────────────────────────
@@ -315,7 +279,7 @@ function draw(){
 // Get the dates to render for a given layer (3 days if composite mode)
 function getDatesForLayer(cfg){
   if(cfg.type==='xyz' || cfg.type==='wmts') return [curDate];
-  if(cfg.type==='best_composite' || cfg.type==='daily_composite') return []; // handled separately
+  if(cfg.type==='chlor_composite') return []; // handled separately in composite block
   // For WMS chlorophyll layers
   if(compositeMode || cfg.composite===3){
     var d1=new Date(curDate); d1.setDate(d1.getDate()-2);
@@ -332,17 +296,23 @@ function _draw(){
   tilesEl.querySelectorAll('img[data-k]').forEach(function(el){existing[el.dataset.k]=el;});
   var used={};var anyNew=false;
 
-  // Render daily composite — all sources x 1 day
+  // Render chlorophyll composite — daily or 3-day based on toggle
   LAYERS.forEach(function(cfg,li){
-    if(!cfg.on || cfg.type!=='daily_composite') return;
+    if(!cfg.on || cfg.type!=='chlor_composite') return;
     var sources = [
-      {wmsLayer:'MODIS_Aqua_L2_Chlorophyll_A', type:'wms'},
-      {wmsLayer:'VIIRS_SNPP_L2_Chlorophyll_A', type:'wms'},
-      {wmsServer:'imos', type:'wms'},
+      {wmsLayer:'MODIS_Aqua_L2_Chlorophyll_A'},
+      {wmsLayer:'VIIRS_SNPP_L2_Chlorophyll_A'},
+      {wmsServer:'imos'},
     ];
-    var dates = [curDate];
-    var totalLayers = sources.length; // 3
-    var tileOp = cfg.opacity / totalLayers;
+    var dates;
+    if(compositeMode){
+      var d1=new Date(curDate); d1.setDate(d1.getDate()-2);
+      var d2=new Date(curDate); d2.setDate(d2.getDate()-1);
+      dates=[fmtDate(d1), fmtDate(d2), curDate];
+    } else {
+      dates=[curDate];
+    }
+    // Using screen blend mode so tiles combine additively - no opacity division needed
 
     sources.forEach(function(src, si){
       dates.forEach(function(dateStr, di){
@@ -359,13 +329,10 @@ function _draw(){
             if(ty<0||ty>=tc)continue;
             var wx=((tx%tc)+tc)%tc;
             var px=Math.round(tx*sc+ox), py=Math.round(ty*sc+oy), sz=Math.round(sc);
-            var url;
-            if(src.wmsServer==='imos'){
-              url=buildImosUrl(src,wx,ty,tz,dateStr);
-            } else {
-              url=buildWmsUrl(src.wmsLayer,wx,ty,tz,dateStr);
-            }
-            var k='chlor_1day|s'+si+'|d'+di+'|'+tz+'|'+wx+'|'+ty;
+            var url = src.wmsServer==='imos'
+              ? buildImosUrl(src,wx,ty,tz,dateStr)
+              : buildWmsUrl(src.wmsLayer,wx,ty,tz,dateStr);
+            var k='chlorophyll|s'+si+'|d'+di+'|'+tz+'|'+wx+'|'+ty;
             used[k]=1;
             if(existing[k]){
               var e=existing[k];
@@ -376,69 +343,7 @@ function _draw(){
               var img=new Image();
               img.dataset.k=k;
               img.dataset.overlay='1';
-              img.style.cssText='position:absolute;left:'+px+'px;top:'+py+'px;width:'+sz+'px;height:'+sz+'px;opacity:'+tileOp+';z-index:'+li+';pointer-events:none;image-rendering:auto;';
-              anyNew=true;
-              img.onload=function(){loadDone();};
-              img.onerror=function(){this.style.display='none';loadDone();};
-              img.src=url;
-              tilesEl.appendChild(img);
-            }
-          }
-        }
-      });
-    });
-  });
-
-  // Render best composite separately — all sources x 3 days
-  LAYERS.forEach(function(cfg,li){
-    if(!cfg.on || cfg.type!=='best_composite') return;
-    var bestSources = [
-      {wmsLayer:'MODIS_Aqua_L2_Chlorophyll_A', type:'wms'},
-      {wmsLayer:'VIIRS_SNPP_L2_Chlorophyll_A', type:'wms'},
-      {wmsServer:'imos', type:'wms'},
-    ];
-    var bestDates = (function(){
-      var d1=new Date(curDate); d1.setDate(d1.getDate()-2);
-      var d2=new Date(curDate); d2.setDate(d2.getDate()-1);
-      var d3=new Date(curDate);
-      return [fmtDate(d1),fmtDate(d2),fmtDate(d3)];
-    })();
-    var totalLayers = bestSources.length * bestDates.length; // 9
-    var tileOp = cfg.opacity / totalLayers;
-
-    bestSources.forEach(function(src, si){
-      bestDates.forEach(function(dateStr, di){
-        var tz=Math.min(Math.floor(V.z), cfg.maxZ);
-        var sc=TS*Math.pow(2,V.z-tz);
-        var tc=Math.pow(2,tz);
-        var cx=lon2tx(V.cx,tz), cy=lat2ty(V.cy,tz);
-        var ox=w/2-cx*sc, oy=h/2-cy*sc;
-        var x0=Math.floor(-ox/sc)-1, x1=Math.ceil((w-ox)/sc)+1;
-        var y0=Math.floor(-oy/sc)-1, y1=Math.ceil((h-oy)/sc)+1;
-
-        for(var tx=x0;tx<=x1;tx++){
-          for(var ty=y0;ty<=y1;ty++){
-            if(ty<0||ty>=tc)continue;
-            var wx=((tx%tc)+tc)%tc;
-            var px=Math.round(tx*sc+ox), py=Math.round(ty*sc+oy), sz=Math.round(sc);
-            var url;
-            if(src.wmsServer==='imos'){
-              url=buildImosUrl(src,wx,ty,tz,dateStr);
-            } else {
-              url=buildWmsUrl(src.wmsLayer,wx,ty,tz,dateStr);
-            }
-            var k='chlor_best|s'+si+'|d'+di+'|'+tz+'|'+wx+'|'+ty;
-            used[k]=1;
-            if(existing[k]){
-              var e=existing[k];
-              e.style.left=px+'px';e.style.top=py+'px';
-              e.style.width=sz+'px';e.style.height=sz+'px';
-              e.style.opacity=tileOp;
-            } else {
-              var img=new Image();
-              img.dataset.k=k;
-              img.dataset.overlay='1';
-              img.style.cssText='position:absolute;left:'+px+'px;top:'+py+'px;width:'+sz+'px;height:'+sz+'px;opacity:'+tileOp+';z-index:'+li+';pointer-events:none;image-rendering:auto;';
+              img.style.cssText='position:absolute;left:'+px+'px;top:'+py+'px;width:'+sz+'px;height:'+sz+'px;opacity:'+cfg.opacity+';z-index:'+li+';pointer-events:none;image-rendering:auto;mix-blend-mode:screen;';
               anyNew=true;
               img.onload=function(){loadDone();};
               img.onerror=function(){this.style.display='none';loadDone();};
@@ -452,7 +357,7 @@ function _draw(){
   });
 
   LAYERS.forEach(function(cfg,li){
-    if(!cfg.on || cfg.type==='best_composite' || cfg.type==='daily_composite') return;
+    if(!cfg.on || cfg.type==='chlor_composite') return;
     var dates=getDatesForLayer(cfg);
     // opacity per layer: divide by number of dates so stacked tiles don't oversaturate
     var tileOpacity = compositeMode && dates.length>1 ? cfg.opacity/dates.length : cfg.opacity;
